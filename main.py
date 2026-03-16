@@ -1,4 +1,3 @@
-from scalar_fastapi import get_scalar_api_reference
 from contextlib import asynccontextmanager
 from typing import Annotated
 
@@ -18,7 +17,6 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 import models
 from database import Base, engine, get_db
 from routers import posts, users
-
 
 
 @asynccontextmanager
@@ -46,7 +44,9 @@ app.include_router(posts.router, prefix="/api/posts", tags=["posts"])
 @app.get("/posts", include_in_schema=False, name="posts")
 async def home(request: Request, db: Annotated[AsyncSession, Depends(get_db)]):
     result = await db.execute(
-        select(models.Post).options(selectinload(models.Post.author)),
+        select(models.Post)
+        .options(selectinload(models.Post.author))
+        .order_by(models.Post.date_posted.desc()),
     )
     posts = result.scalars().all()
     return templates.TemplateResponse(
@@ -94,7 +94,8 @@ async def user_posts_page(
     result = await db.execute(
         select(models.Post)
         .options(selectinload(models.Post.author))
-        .where(models.Post.user_id == user_id),
+        .where(models.Post.user_id == user_id)
+        .order_by(models.Post.date_posted.desc()),
     )
     posts = result.scalars().all()
     return templates.TemplateResponse(
@@ -102,6 +103,7 @@ async def user_posts_page(
         "user_posts.html",
         {"posts": posts, "user": user, "title": f"{user.username}'s Posts"},
     )
+
 
 @app.exception_handler(StarletteHTTPException)
 async def general_http_exception_handler(
@@ -147,11 +149,3 @@ async def validation_exception_handler(
         },
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
     )
-
-@app.get("/scalar", include_in_schema=False)
-async def scalar_docs():
-    return get_scalar_api_reference(
-    openapi_url=app.openapi_url,
-    title="My API",
-    scalar_favicon_url="https://fastapi.tiangolo.com/img/favicon.png",
-)
